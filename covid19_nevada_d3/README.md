@@ -1,6 +1,6 @@
 ## Simple Graph of Nevada Covid-19 Cases vs Deaths
 
-![](graphics/demov3.png)
+![](graphics/demov4.png)
 
 This was a simple, quick, and fun exercise utilizing D3 v7 to view continuously updating Covid-19 data in Nevada.
 
