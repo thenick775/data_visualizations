@@ -1,4 +1,4 @@
-### terbine_visualizations
+### Data Visualizations
 
 This repository contains interactive visualizations built in my free time as fun exercises.
 
