@@ -2,7 +2,7 @@
 
 ![](graphics/demov4.png)
 
-This was a simple, quick, and fun exercise utilizing D3 v7 to view continuously updating Covid-19 data in Nevada.
+This was a simple, quick, and fun exercise utilizing D3 v7 to view continuously updating Covid-19 data in Nevada (now able to select other states as well).
 
 Data and counts are displayed using linear interpolation between actual data points.
 
