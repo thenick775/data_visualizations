@@ -47,6 +47,10 @@ table{
     display:none;
 }
 
+.selection {
+    pointer-events: none;
+}
+
 [contenteditable="true"].single-line {
     white-space: nowrap;
     width:90px;
@@ -63,7 +67,7 @@ table{
 
 </style>
 <body>
-<script src="https://d3js.org/d3.v7.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.2.1/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
 <script>
 var datasource = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv"
@@ -92,35 +96,28 @@ var y1 = d3.scaleLinear()
 var color = d3.scaleOrdinal(d3.schemeCategory10);
 
 var xAxis = d3.axisBottom(x)
-    //.scale(x)
     .ticks(5)
     .tickSizeInner(15)
-    .tickSizeOuter(0)
-//.orient("bottom");
+    .tickSizeOuter(0);
 
 var yAxisl = d3.axisLeft(y0)
-    //.scale(y0)
     .tickFormat(function(d) {
         return d;
     })
     .ticks(5)
     .tickSizeInner(10)
-    .tickSizeOuter(0)
-//.orient("left");
+    .tickSizeOuter(0);
 
 var yAxisr = d3.axisRight(y1)
-    //.scale(y1)
     .tickFormat(function(d) {
         return d;
     })
     .ticks(5)
     .tickSizeInner(10)
-    .tickSizeOuter(0)
-//.orient("right");
+    .tickSizeOuter(0);
 
 var linec = d3.line()
     .curve(d3.curveLinear)
-    //.interpolate("linear")
     .x(function(d) {
         return x(d.date);
     })
@@ -130,7 +127,6 @@ var linec = d3.line()
 
 var lined = d3.line()
     .curve(d3.curveLinear)
-    //.interpolate("linear")
     .x(function(d) {
         return x(d.date);
     })
@@ -264,7 +260,7 @@ function gencharts(dat, which, init) {
     data = dat.filter(function(d) {
         return d.state == which
     });
-    console.log(data)
+    //console.log(data)
 
     color.domain(Object.keys(data[0]).filter(function(key) {
         return key == "cases" || key == 'deaths';
@@ -315,7 +311,7 @@ function gencharts(dat, which, init) {
         })
     ]);
 
-    svg.append("g")
+    var xAxisholder = svg.append("g")
         .attr("class", "x axis")
         .style("font-size", "16px")
         .attr("transform", "translate(0," + height + ")")
@@ -343,6 +339,11 @@ function gencharts(dat, which, init) {
         .attr("transform", "rotate(-90)")
         .text("Cases (green)");
 
+    // Add brushing
+    var brush = d3.brushX()                   // Add the brush feature using the d3.brush function
+        .extent( [ [0,0], [width,height] ] )  // initialise the brush area: start at 0,0 and finishes at width,height: it means I select the whole graph area
+        .on("end", chartZoom)                 // Each time the brush selection changes, trigger the 'chartZoom' function
+
     svg.append("g")
         .attr("class", "y axisr")
         .attr("transform", "translate(" + width + " ,0)")
@@ -359,6 +360,14 @@ function gencharts(dat, which, init) {
         .attr("dy", ".75em")
         .text("Deaths (red)");
 
+    svg.append("defs").append("svg:clipPath") //for when line zoom moves path outside of its current snapped position
+        .attr("id", "clip")
+        .append("svg:rect")
+        .attr("width", width )
+        .attr("height", height )
+        .attr("x", 0)
+        .attr("y", 0);
+
     svg.append("line")
         .attr("class", "horizontalGrid")
         .attr("x1", 0)
@@ -374,7 +383,8 @@ function gencharts(dat, which, init) {
     var tracklines = svg.selectAll(".trackline")
         .data(cases_deaths)
         .enter().append("g")
-        .attr("class", "trackline");
+        .attr("class", "trackline")
+        .attr("clip-path", "url(#clip)");
 
     var path = svg.selectAll(".trackline").append("path")
         .attr("class", "line")
@@ -389,11 +399,10 @@ function gencharts(dat, which, init) {
             }
         });
 
-    console.log(path._groups[0])
-
+    //console.log(path._groups[0])
     var totalLength = [path._groups[0][0].getTotalLength(), path._groups[0][1].getTotalLength()];
 
-    console.log(totalLength)
+    console.log("total graph lengths: " + totalLength)
 
     d3.selectAll('.line')
         .attr("stroke-dasharray", function(d, i) {
@@ -408,22 +417,71 @@ function gencharts(dat, which, init) {
         .attr("stroke-dashoffset", 0)
         .call(endAll, function() {
             interactive = true
-        });;
+        });
 
     var mouseMask = svg.append("g")
         .attr("class", "mouse-mask");
+
+    var idleTimeout
+    function idled() { idleTimeout = null; }
+
+    function chartZoom(e) { //zoom actions effecting graph
+        if (!interactive) {
+            mouseMask.call(brush.move, null)
+            return
+        }
+        console.log('zooming')
+        extent = e.selection //get boundaries within brush selection
+
+        // If no selection, back to initial coordinate. Otherwise, update X axis domain
+        if(!extent){
+            console.log('in first zoom')
+            if (!idleTimeout) return idleTimeout = setTimeout(idled, 350); // This allows to wait a little bit
+            x.domain(d3.extent(data, function(d) {
+                return d.date;
+            }));
+        } else{
+            console.log('in second zoom')
+            console.log(extent[0],extent[1])
+            x.domain([ x.invert(extent[0]), x.invert(extent[1]) ])
+            mouseMask.call(brush.move, null) // This remove the grey brush area as soon as the selection has been done
+        }
+
+        // Update axis and line position
+        xAxisholder.transition().duration(1000).call(d3.axisBottom(x).ticks(5).tickSizeInner(15).tickSizeOuter(0))
+
+        svg.selectAll(".line")
+            .transition()
+            .duration(700)
+            .attr("d", function(d) {
+                return (d.name == 'cases' ? linec(d.values) : lined(d.values))
+            })
+            .style("stroke", function(d) {
+                if (d.name == "cases") {
+                    return "rgb(000,255,000)"
+                } else {
+                    return "rgb(255,000,000)";
+                }
+            })
+            .attr('stroke-dasharray', null) //remove dash and stroke, as this will cause the line to look broken
+            .attr('stroke-dashoffset', null);
+    }
+
+    mouseMask.call(brush); //enable initial zoom brushing actions
 
     mouseMask.append("path") // this is the vertical line to follow mouse
         .attr("class", "user-tracker")
         .style("stroke", "gray")
         .style("stroke-width", "1px")
-        .style("opacity", "0");
+        .style("opacity", "0")
+        .attr('pointer-events', 'none'); //necessary as otherwise brush overlay will interpret mouse over this elem as mouseout (but its always under mouse pos)
 
     var circleTracker = mouseMask.selectAll('.linecircletracker')
         .data(cases_deaths)
         .enter()
         .append("g")
-        .attr("class", "linecircletracker");
+        .attr("class", "linecircletracker")
+        .attr('pointer-events', 'none'); //necessary as otherwise brush overlay will interpret mouse over this elem as mouseout
 
     circleTracker.append("circle")
         .attr("r", 7)
@@ -455,7 +513,7 @@ function gencharts(dat, which, init) {
             .style("opacity", "1");
     }
 
-    mouseMask.append('svg:rect')
+    mouseMask.select('.overlay')//select the overlay added by the brush, this is our event proxy
         .attr('width', width)
         .attr('height', height)
         .attr('fill', 'none')
@@ -496,6 +554,8 @@ function gencharts(dat, which, init) {
                         return d.date.isSame(moment(xDate))
                     }) //bisect(d.values, xDate);
 
+                    totalLength = [path._groups[0][0].getTotalLength(), path._groups[0][1].getTotalLength()];
+
                     var beginning = 0,
                         end = totalLength[i],
                         target = null;
@@ -511,6 +571,8 @@ function gencharts(dat, which, init) {
                         else if (pos.x < mouse[0]) beginning = target;
                         else break; //position found
                     }
+                    
+
                     if (i == 0) { //only two circle trackers here
                         d3.select(this).select('text')
                             .text(moment(xDate).format('MMM DD YYYY') + " Cases: " + y0.invert(pos.y).toFixed(0)).style('text-anchor', "end").attr("x", "-25");
@@ -533,10 +595,42 @@ function gencharts(dat, which, init) {
                                     }
                                 }
                             })
+
+                        var bounding = svg.select('g').node().getBoundingClientRect();
+                        //console.log(bounding.right + " , "+ a.right);
+                        if (bounding.right - a.width + 70 < a.right ) {
+                            // Right side is out of viewport
+                            console.log("linecircletracker outside right viewport, "+ (d3.select(this).node().getBoundingClientRect().width/4));
+                            d3.select(this).select('text').attr("x", (-d3.select(this).node().getBoundingClientRect().width/4)+20);
+                            d3.select(this).select('text').attr("y", "-25");
+                        } else{
+                            d3.select(this).select('text').attr("y", "0");
+                        }
                     }
 
                     return "translate(" + mouse[0] + "," + pos.y + ")";
                 });
+        })
+        .on("dblclick",function(){ //double click resets the chart to its original zoom level (none)
+          x.domain(d3.extent(data, function(d) {
+            return d.date;
+          }));
+          xAxisholder.transition().call(d3.axisBottom(x))
+
+            svg.selectAll(".line")
+                .transition()
+                .duration(700)
+                .attr("d", function(d) {
+                    return (d.name == 'cases' ? linec(d.values) : lined(d.values))
+                })
+                .style("stroke", function(d) {
+                    if (d.name == "cases") {
+                        return "rgb(000,255,000)"
+                    } else {
+                        return "rgb(255,000,000)";
+                    }
+                });
+
         });
 
     var legend = svg.selectAll('mydots')
