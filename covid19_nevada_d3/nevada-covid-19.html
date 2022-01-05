@@ -40,7 +40,7 @@ body > svg > g > g.y.axisr > path{
 }
 
 text {
-    fill : white;
+    fill: white;
 }
 
 table{
@@ -170,7 +170,7 @@ function responsivefy(svg) {
     // and resizes the svg to fill it
     // while maintaining a consistent aspect ratio
     function resize() {
-        console.log("resizing func", window.innerHeight-40)
+        //console.log("resizing func", window.innerHeight-40)
         const w = parseInt(container.style('width'));
         svg.attr('width', w);
         svg.attr('height', Math.round(w / aspect) > window.innerHeight-40 ? window.innerHeight-40 : Math.round(w / aspect));
@@ -426,22 +426,24 @@ function gencharts(dat, which, init) {
     function idled() { idleTimeout = null; }
 
     function chartZoom(e) { //zoom actions effecting graph
+        if (!e.sourceEvent) return; // Only transition after input, per fix by mike bostock https://github.com/d3/d3-brush/issues/10
         if (!interactive) {
+            console.log("not interactive yet chartzoom")
             mouseMask.call(brush.move, null)
-            return
+            return;
         }
         console.log('zooming')
         extent = e.selection //get boundaries within brush selection
 
         // If no selection, back to initial coordinate. Otherwise, update X axis domain
         if(!extent){
-            console.log('in first zoom')
+            console.log("in first zoom")
             if (!idleTimeout) return idleTimeout = setTimeout(idled, 350); // This allows to wait a little bit
             x.domain(d3.extent(data, function(d) {
                 return d.date;
             }));
         } else{
-            console.log('in second zoom')
+            console.log("in second zoom")
             console.log(extent[0],extent[1])
             x.domain([ x.invert(extent[0]), x.invert(extent[1]) ])
             mouseMask.call(brush.move, null) // This remove the grey brush area as soon as the selection has been done
@@ -630,7 +632,6 @@ function gencharts(dat, which, init) {
                         return "rgb(255,000,000)";
                     }
                 });
-
         });
 
     var legend = svg.selectAll('mydots')
@@ -806,6 +807,8 @@ function gencharts(dat, which, init) {
             if (event.keyCode === 13) { //if enter key submit and redraw chart
                 var newstate = d3.select("#stateinput").text()
                 if (dat.filter(d => d.state === newstate).length > 0 && newstate != which) {
+                    interactive = false
+                    mouseovertrackers() //remove circletrackers
                     gencharts(dat, newstate, false)
                 }
             }
@@ -841,6 +844,8 @@ function gencharts(dat, which, init) {
             d3.select('#switchrect').attr('fill', 'darkgray');
             var newstate = d3.select("#stateinput").text()
             if (dat.filter(d => d.state === newstate).length > 0 && newstate != which) {
+                interactive = false
+                mouseovertrackers() //remove circletrackers
                 gencharts(dat, newstate, false)
             }
         })
