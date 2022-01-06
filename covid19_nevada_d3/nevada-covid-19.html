@@ -33,6 +33,10 @@ body > svg > g > g.y.axisr > path{
     opacity: 0;
 }
 
+body > svg > g > g.y.axisl > path{
+    opacity: 0;
+}
+
 .line {
   fill: none;
   stroke: steelblue;
@@ -337,7 +341,13 @@ function gencharts(dat, which, init) {
         .attr("x", -height / 2 + 70)
         .attr("dy", ".75em")
         .attr("transform", "rotate(-90)")
-        .text("Cases (green)");
+        .text("Cases (")
+        .append("tspan")
+        .style("fill","rgb(000,255,000)")
+        .text("green")
+        .append("tspan")
+        .style("fill","white")
+        .text(")");
 
     // Add brushing
     var brush = d3.brushX()                   // Add the brush feature using the d3.brush function
@@ -358,7 +368,13 @@ function gencharts(dat, which, init) {
         .attr("y", -width - 90)
         .attr("x", height / 2)
         .attr("dy", ".75em")
-        .text("Deaths (red)");
+        .text("Deaths (")
+        .append("tspan")
+        .style("fill", "rgb(255,000,000)")
+        .text("red")
+        .append("tspan")
+        .style("fill", "white")
+        .text(")");
 
     svg.append("defs").append("svg:clipPath") //for when line zoom moves path outside of its current snapped position
         .attr("id", "clip")
@@ -451,6 +467,7 @@ function gencharts(dat, which, init) {
 
         // Update axis and line position
         xAxisholder.transition().duration(1000).call(d3.axisBottom(x).ticks(5).tickSizeInner(15).tickSizeOuter(0))
+        snapYaxesZoomed(700);
 
         svg.selectAll(".line")
             .transition()
@@ -602,7 +619,7 @@ function gencharts(dat, which, init) {
                         //console.log(bounding.right + " , "+ a.right);
                         if (bounding.right - a.width + 70 < a.right ) {
                             // Right side is out of viewport
-                            console.log("linecircletracker outside right viewport, "+ (d3.select(this).node().getBoundingClientRect().width/4));
+                            //console.log("linecircletracker outside right viewport, "+ (d3.select(this).node().getBoundingClientRect().width/4));
                             d3.select(this).select('text').attr("x", (-d3.select(this).node().getBoundingClientRect().width/4)+20);
                             d3.select(this).select('text').attr("y", "-25");
                         } else{
@@ -619,19 +636,19 @@ function gencharts(dat, which, init) {
           }));
           xAxisholder.transition().call(d3.axisBottom(x))
 
-            svg.selectAll(".line")
-                .transition()
-                .duration(700)
-                .attr("d", function(d) {
-                    return (d.name == 'cases' ? linec(d.values) : lined(d.values))
-                })
-                .style("stroke", function(d) {
-                    if (d.name == "cases") {
-                        return "rgb(000,255,000)"
-                    } else {
-                        return "rgb(255,000,000)";
-                    }
-                });
+          svg.selectAll(".line")
+              .transition()
+              .duration(700)
+              .attr("d", function(d) {
+                  return (d.name == 'cases' ? linec(d.values) : lined(d.values))
+            })
+            .style("stroke", function(d) {
+                if (d.name == "cases") {
+                    return "rgb(000,255,000)"
+                } else {
+                    return "rgb(255,000,000)";
+                }
+            });
         });
 
     var legend = svg.selectAll('mydots')
@@ -702,36 +719,22 @@ function gencharts(dat, which, init) {
         if (interactive) {
             if (currentscaling == 'relative') {
                 currentscaling = 'absolute'
-
-                y1.domain([
-                    d3.min(cases_deaths, function(c) {
-                        return d3.min(c.values, function(v) {
-                            return v.cases;
-                        });
-                    }),
-                    d3.max(cases_deaths, function(c) {
-                        return d3.max(c.values, function(v) {
-                            return v.cases;
-                        });
-                    })
-                ]);
-
             } else {
                 currentscaling = 'relative'
-
-                y1.domain([
-                    d3.min(cases_deaths, function(c) {
-                        return d3.min(c.values, function(v) {
-                            return v.deaths;
-                        });
-                    }),
-                    d3.max(cases_deaths, function(c) {
-                        return d3.max(c.values, function(v) {
-                            return v.deaths;
-                        });
-                    })
-                ]);
             }
+
+            y1.domain([
+                d3.min(cases_deaths, function(c) {
+                    return d3.min(c.values, function(v) {
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                    });
+                }),
+                d3.max(cases_deaths, function(c) {
+                    return d3.max(c.values, function(v) {
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                    });
+                })
+            ]);
 
             svg.selectAll(".line")
                 .transition()
@@ -752,6 +755,45 @@ function gencharts(dat, which, init) {
                 .duration(700)
                 .call(yAxisr)
         }
+    }
+
+    function snapYaxesZoomed(dur){
+        //set domain of y axes
+        y0.domain([
+            d3.min(cases_deaths, function(c) {
+                return d3.min(c.values, function(v) {
+                    return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? v.cases : null;
+                });
+            }),
+            d3.max(cases_deaths, function(c) {
+                return d3.max(c.values, function(v) {
+                    return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? v.cases : null;
+                });
+            })
+        ]);
+
+        y1.domain([
+            d3.min(cases_deaths, function(c) {
+                return d3.min(c.values, function(v) {
+                    return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                });
+            }),
+            d3.max(cases_deaths, function(c) {
+                return d3.max(c.values, function(v) {
+                    return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                });
+            })
+        ]);
+
+        svg.selectAll("g .y.axisr")
+                .transition()
+                .duration(dur)
+                .call(yAxisr);
+
+        svg.selectAll("g .y.axisl")
+                .transition()
+                .duration(dur)
+                .call(yAxisl);
     }
 
     //toggle scaling button
