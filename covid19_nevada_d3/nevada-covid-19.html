@@ -76,6 +76,7 @@ table{
 <script>
 var datasource = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv"
 var currentscaling = 'relative'
+var currentsnap = "relative"
 var interactive = false
 var needtosettracker = false
 
@@ -191,23 +192,12 @@ var svg = d3.select("body").append("svg")
     .append("g")
     .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
 
-svg.append("text")
-    .attr("x", (width / 2) + 25)
-    .attr("y", height + 80)
-    .attr("text-anchor", "middle")
-    .style("font-size", "12px")
-    .style('cursor', 'pointer')
-    .text("Data Provided by N.Y Times")
-    .on("click", function() {
-        window.open("https://github.com/nytimes/covid-19-data", "", "width=1080,height=780,resizeable,scrollbars");
-    })
-
 var table = null
 var dat = null
 
 d3.csv(datasource)
     .then(function(data) {
-        console.log(data)
+        //console.log(data)
         data.forEach(function(d) {
             d.date = moment(d.date, "YYYY-MM-DD");
             d.cases = +d.cases;
@@ -444,7 +434,6 @@ function gencharts(dat, which, init) {
     function chartZoom(e) { //zoom actions effecting graph
         if (!e.sourceEvent) return; // Only transition after input, per fix by mike bostock https://github.com/d3/d3-brush/issues/10
         if (!interactive) {
-            console.log("not interactive yet chartzoom")
             mouseMask.call(brush.move, null)
             return;
         }
@@ -453,20 +442,17 @@ function gencharts(dat, which, init) {
 
         // If no selection, back to initial coordinate. Otherwise, update X axis domain
         if(!extent){
-            console.log("in first zoom")
             if (!idleTimeout) return idleTimeout = setTimeout(idled, 350); // This allows to wait a little bit
             x.domain(d3.extent(data, function(d) {
                 return d.date;
             }));
         } else{
-            console.log("in second zoom")
-            console.log(extent[0],extent[1])
             x.domain([ x.invert(extent[0]), x.invert(extent[1]) ])
             mouseMask.call(brush.move, null) // This remove the grey brush area as soon as the selection has been done
         }
 
         // Update axis and line position
-        xAxisholder.transition().duration(1000).call(d3.axisBottom(x).ticks(5).tickSizeInner(15).tickSizeOuter(0))
+        xAxisholder.transition().duration(750).call(d3.axisBottom(x).ticks(5).tickSizeInner(15).tickSizeOuter(0))
         snapYaxesZoomed(700);
 
         svg.selectAll(".line")
@@ -634,7 +620,7 @@ function gencharts(dat, which, init) {
           x.domain(d3.extent(data, function(d) {
             return d.date;
           }));
-          xAxisholder.transition().call(d3.axisBottom(x))
+          xAxisholder.transition().duration(750).call(d3.axisBottom(x))
 
           svg.selectAll(".line")
               .transition()
@@ -686,7 +672,7 @@ function gencharts(dat, which, init) {
         .attr('id', 'fulldatrect')
         .attr('fill', 'white')
         .attr('x', '630')
-        .attr('y', '65')
+        .attr('y', '46')
         .attr("width", '90px')
         .attr("height", "30px")
         .style('cursor', 'pointer')
@@ -701,7 +687,7 @@ function gencharts(dat, which, init) {
         });
     svg.append("text")
         .attr('x', '633')
-        .attr('y', '83')
+        .attr('y', '64')
         .style("fill", 'black')
         .style("font-size", "12")
         .text("View Raw Data")
@@ -715,7 +701,7 @@ function gencharts(dat, which, init) {
             d3.select('#fulldatrect').attr('fill', 'white');
         });
 
-    function ToggleScaling() {
+    function ToggleScaling(dur) {
         if (interactive) {
             if (currentscaling == 'relative') {
                 currentscaling = 'absolute'
@@ -726,19 +712,27 @@ function gencharts(dat, which, init) {
             y1.domain([
                 d3.min(cases_deaths, function(c) {
                     return d3.min(c.values, function(v) {
-                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                        if (currentsnap == "relative"){
+                            return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                        } else{
+                            return currentscaling == 'relative'? v.deaths: v.cases;
+                        }
                     });
                 }),
                 d3.max(cases_deaths, function(c) {
                     return d3.max(c.values, function(v) {
-                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                        if(currentsnap == "relative"){
+                            return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                        } else{
+                            return currentscaling == 'relative'? v.deaths: v.cases;
+                        }
                     });
                 })
             ]);
 
             svg.selectAll(".line")
                 .transition()
-                .duration(700)
+                .duration(dur)
                 .attr("d", function(d) {
                     return (d.name == 'cases' ? linec(d.values) : lined(d.values))
                 })
@@ -752,7 +746,7 @@ function gencharts(dat, which, init) {
 
             svg.selectAll("g .y.axisr")
                 .transition()
-                .duration(700)
+                .duration(dur)
                 .call(yAxisr)
         }
     }
@@ -796,12 +790,90 @@ function gencharts(dat, which, init) {
                 .call(yAxisl);
     }
 
+    function unsnapYAxisZoom(dur){
+        if (currentsnap == "relative"){
+            currentsnap = "absolute";
+            svg.select("#unsnapy1text").text("Resnap Y Axis");
+        } else{
+            currentsnap = "relative";
+            svg.select("#unsnapy1text").text("Unsnap Y Axis");
+        }
+
+        y0.domain([
+            d3.min(cases_deaths, function(c) {
+                return d3.min(c.values, function(v) {
+                    if(currentsnap == "relative"){
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? v.cases : null;
+                    } else {
+                        return v.cases;
+                    }
+                });
+            }),
+            d3.max(cases_deaths, function(c) {
+                return d3.max(c.values, function(v) {
+                    if(currentsnap == "relative"){
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? v.cases : null;
+                    } else{
+                        return v.cases;
+                    }
+                });
+            })
+        ]);
+
+        y1.domain([
+            d3.min(cases_deaths, function(c) {
+                return d3.min(c.values, function(v) {
+                    if (currentsnap == "relative"){
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                    } else{
+                        return v.deaths;
+                    }
+                });
+            }),
+            d3.max(cases_deaths, function(c) {
+                return d3.max(c.values, function(v) {
+                    if(currentsnap == "relative"){
+                        return (v.date >= x.domain()[0] && v.date <= x.domain()[1]) ? currentscaling == 'relative'? v.deaths: v.cases : null;
+                    } else{
+                        return v.deaths;
+                    }
+                });
+            })
+        ]);
+
+        svg.selectAll("g .y.axisr")
+                .transition()
+                .duration(dur)
+                .call(yAxisr);
+
+        svg.selectAll("g .y.axisl")
+                .transition()
+                .duration(dur)
+                .call(yAxisl);
+
+        svg.selectAll(".line")
+            .transition()
+            .duration(700)
+            .attr("d", function(d) {
+                return (d.name == 'cases' ? linec(d.values) : lined(d.values))
+            })
+            .style("stroke", function(d) {
+                if (d.name == "cases") {
+                    return "rgb(000,255,000)"
+                } else {
+                    return "rgb(255,000,000)";
+                }
+            })
+            .attr('stroke-dasharray', null) //remove dash and stroke, as this will cause the line to look broken
+            .attr('stroke-dashoffset', null);
+    }
+
     //toggle scaling button
     svg.append('rect')
         .attr('id', 'fulldatrect2')
         .attr('fill', 'white')
         .attr('x', '630')
-        .attr('y', '115')
+        .attr('y', '83')
         .attr("width", '90px')
         .attr("height", "30px")
         .style('cursor', 'pointer')
@@ -816,7 +888,7 @@ function gencharts(dat, which, init) {
         });
     svg.append("text")
         .attr('x', '636')
-        .attr('y', '133')
+        .attr('y', '101')
         .style("fill", 'black')
         .style("font-size", "12")
         .style('cursor', 'pointer')
@@ -824,10 +896,45 @@ function gencharts(dat, which, init) {
         .attr('color', 'black')
         .on("mousedown", function(data) {
             d3.select('#fulldatrect2').attr('fill', 'darkgray');
-            ToggleScaling();
+            ToggleScaling(700);
         })
         .on("mouseup", function(data) {
             d3.select('#fulldatrect2').attr('fill', 'white');
+        });
+
+    //un/re snap y axis button
+    svg.append('rect')
+        .attr('id', 'unsnapy1')
+        .attr('fill', 'white')
+        .attr('x', '630')
+        .attr('y', '120')
+        .attr("width", '90px')
+        .attr("height", "30px")
+        .style('cursor', 'pointer')
+        .on("mousedown", function(data) {
+            d3.select('#unsnapy1').attr('fill', 'darkgray');
+        })
+        .on("mouseup", function(data) {
+            d3.select('#unsnapy1').attr('fill', 'white');
+        })
+        .on("mouseout", function(data) {
+            d3.select('#unsnapy1').attr('fill', 'white');
+        });
+    svg.append("text")
+        .attr('id', 'unsnapy1text')
+        .attr('x', '636')
+        .attr('y', '140')
+        .style("fill", 'black')
+        .style("font-size", "12")
+        .style('cursor', 'pointer')
+        .text("Unsnap Y Axis")
+        .attr('color', 'black')
+        .on("mousedown", function(data) {
+            d3.select('#unsnapy1').attr('fill', 'darkgray');
+            unsnapYAxisZoom(700);
+        })
+        .on("mouseup", function(data) {
+            d3.select('#unsnapy1').attr('fill', 'white');
         });
 
     //input field
@@ -845,7 +952,7 @@ function gencharts(dat, which, init) {
         .attr("class", "single-line")
         .text(which)
         .on("keypress", function() {
-            console.log(event.keyCode)
+            //console.log(event.keyCode)
             if (event.keyCode === 13) { //if enter key submit and redraw chart
                 var newstate = d3.select("#stateinput").text()
                 if (dat.filter(d => d.state === newstate).length > 0 && newstate != which) {
